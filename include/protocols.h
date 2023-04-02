@@ -15,7 +15,7 @@ struct arp_header {
 } __attribute__((packed));
 
 /* Ethernet frame header*/
-struct  ether_header {
+struct ether_header {
     uint8_t  ether_dhost[6]; //adresa mac destinatie
     uint8_t  ether_shost[6]; //adresa mac sursa
     uint16_t ether_type;     // identificator protocol encapsulat

@@ -8,19 +8,16 @@
 
 #define MAX_PACKET_LEN 1600
 #define ROUTER_NUM_INTERFACES 3
+#define MAX_RTABLE_LEN 100000
 
-int send_to_link(int interface, char *frame_data, size_t length);
-
-/*
- * @brief Receives a packet. Blocking function, blocks if there is no packet to
- * be received.
- *
- * @param frame_data - region of memory in which the data will be copied; should
- *        have at least MAX_PACKET_LEN bytes allocated 
- * @param length - will be set to the total number of bytes received.
- * Returns: the interface it has been received from.
- */
-int recv_from_any_link(char *frame_data, size_t *length);
+#define DIE(condition, message, ...) \
+	do { \
+		if ((condition)) { \
+			fprintf(stderr, "[(%s:%d)]: " # message "\n", __FILE__, __LINE__, ##__VA_ARGS__); \
+			perror(""); \
+			exit(1); \
+		} \
+	} while (0)
 
 /* Route table entry */
 struct route_table_entry {
@@ -35,6 +32,19 @@ struct arp_entry {
     uint32_t ip;
     uint8_t mac[6];
 };
+
+int send_to_link(int interface, char *frame_data, size_t length);
+
+/*
+ * @brief Receives a packet. Blocking function, blocks if there is no packet to
+ * be received.
+ *
+ * @param frame_data - region of memory in which the data will be copied; should
+ *        have at least MAX_PACKET_LEN bytes allocated 
+ * @param length - will be set to the total number of bytes received.
+ * Returns: the interface it has been received from.
+ */
+int recv_from_any_link(char *frame_data, size_t *length);
 
 char *get_interface_ip(int interface);
 
@@ -87,14 +97,5 @@ int read_rtable(const char *path, struct route_table_entry *rtable);
 int parse_arp_table(char *path, struct arp_entry *arp_table);
 
 void init(int argc, char *argv[]);
-
-#define DIE(condition, message, ...) \
-	do { \
-		if ((condition)) { \
-			fprintf(stderr, "[(%s:%d)]: " # message "\n", __FILE__, __LINE__, ##__VA_ARGS__); \
-			perror(""); \
-			exit(1); \
-		} \
-	} while (0)
 
 #endif /* _SKEL_H_ */
