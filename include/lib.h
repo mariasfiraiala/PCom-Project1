@@ -9,6 +9,7 @@
 #define MAX_PACKET_LEN 1600
 #define ROUTER_NUM_INTERFACES 3
 #define MAX_RTABLE_LEN 100000
+#define MAX_ARP_TABLE_LEN 20
 
 #define DIE(condition, message, ...) \
 	do { \

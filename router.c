@@ -32,6 +32,7 @@ struct arp_entry *dr_get_arp_entry(uint32_t given_ip, struct arp_entry *arp_tabl
 	for (int i = 0; i < arp_table_len; ++i)
 		if (arp_table[i].ip == given_ip)
 			return &arp_table[i];
+
 	return NULL;
 }
 
@@ -40,13 +41,13 @@ int dr_ip_packet(struct iphdr *ip_hdr, int interface, struct route_table_entry *
 				struct arp_entry *arp_table, uint32_t arp_table_len, size_t len)
 {
 	char *router_ip_tmp = get_interface_ip(interface);
-	struct sockaddr_in router_ip;
+	int router_ip;
 
 	inet_pton(AF_INET, router_ip_tmp, &router_ip);
 
 	printf("After inet_pton()\n");
 
-	if (ip_hdr->daddr != router_ip.sin_addr.s_addr) {
+	if (ip_hdr->daddr != router_ip) {
 		uint16_t received_checksum = ip_hdr->check;
 
 		ip_hdr->check = 0;
@@ -81,9 +82,9 @@ int dr_ip_packet(struct iphdr *ip_hdr, int interface, struct route_table_entry *
 			return -1;
 		}
 
-		struct arp_entry *next_arp = dr_get_arp_entry(ip_hdr->daddr, arp_table, arp_table_len);
+		struct arp_entry *next_arp = dr_get_arp_entry(next_route->next_hop, arp_table, arp_table_len);
 
-		struct ether_header *eth_hdr = (struct ether_header *)(ip_hdr - sizeof(*eth_hdr));
+		struct ether_header *eth_hdr = (struct ether_header *)((char *)ip_hdr - sizeof(*eth_hdr));
 
 		memcpy(eth_hdr->ether_dhost, next_arp->mac, sizeof(next_arp->mac));
 		get_interface_mac(next_route->interface, eth_hdr->ether_shost);
@@ -96,8 +97,32 @@ int dr_ip_packet(struct iphdr *ip_hdr, int interface, struct route_table_entry *
 	return 0;
 }
 
-int dr_arp_packet()
+int dr_arp_packet(struct arp_header *arp_hdr, int interface, int len)
 {
+	if (ntohs(arp_hdr->op) == 1) {
+		char *router_ip_tmp = get_interface_ip(interface);
+		int router_ip;
+
+		inet_pton(AF_INET, router_ip_tmp, &router_ip);
+
+		if (arp_hdr->tpa != router_ip)
+			return -1;
+
+		arp_hdr->op = htons(2);
+
+		arp_hdr->tpa = arp_hdr->spa;
+		arp_hdr->spa = router_ip;
+
+		memcpy(arp_hdr->tha, arp_hdr->sha, sizeof(arp_hdr->sha));
+		get_interface_mac(interface, arp_hdr->sha);
+
+		struct ether_header *eth_hdr = (struct ether_header *)((char *)arp_hdr - sizeof(*eth_hdr));
+		memcpy(eth_hdr->ether_dhost, arp_hdr->tha, sizeof(arp_hdr->tha));
+		get_interface_mac(interface, eth_hdr->ether_shost);
+
+		send_to_link(interface, (char *)eth_hdr, len);
+	}
+
 	return 0;
 }
 
@@ -112,7 +137,7 @@ int main(int argc, char *argv[])
 	DIE(!rtable, "malloc() failed\n");
 	uint32_t rtable_len = read_rtable(argv[1], rtable);
 
-	struct arp_entry *arp_table = malloc (sizeof(*arp_table) * MAX_RTABLE_LEN);
+	struct arp_entry *arp_table = malloc (sizeof(*arp_table) * MAX_ARP_TABLE_LEN);
 	DIE(!arp_table, "malloc() failed\n");
 	uint32_t arp_table_len = parse_arp_table("arp_table.txt", arp_table);
 
@@ -132,15 +157,12 @@ int main(int argc, char *argv[])
 
 		switch (ntohs(eth_hdr->ether_type)) {
 		case 0x0800:
-			printf("After ether_type()\n");
 			dr_ip_packet((struct iphdr *)(buf + sizeof(*eth_hdr)), interface, rtable, rtable_len, arp_table, arp_table_len, len);
 			break;
 		case 0x0806:
-			dr_arp_packet();
+			dr_arp_packet((struct arp_header *)(buf + sizeof(*eth_hdr)), interface, len);
 			break;
 		}
-
-		printf("Doesn't recognize ether_type\n");
 
 		/* TODO 1: Check if packet destination is the router or all the other hosts.
 				   If not, drop the packet. */
