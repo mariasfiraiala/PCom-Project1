@@ -34,6 +34,12 @@ struct arp_entry {
     uint8_t mac[6];
 };
 
+struct waiting_queue_entry {
+	char *eth_hdr;
+	int len;
+	struct route_table_entry *next_route;
+};
+
 int send_to_link(int interface, char *frame_data, size_t length);
 
 /*

@@ -11,3 +11,4 @@ fi
 
 sudo fuser -k 6653/tcp
 sudo python3 checker/topo.py tests
+sudo make clean
