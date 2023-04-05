@@ -67,6 +67,29 @@ void dr_send_arp_request(struct ether_header *eth_hdr, struct route_table_entry 
 	send_to_link(next_route->interface, (char *)eth_hdr, sizeof(*eth_hdr) + sizeof(*arp_hdr));
 }
 
+int dr_icmp_packet(struct ether_header *eth_hdr, uint8_t type, int interface)
+{
+	struct iphdr *ip_hdr = (struct iphdr *)((char *)eth_hdr + sizeof(*eth_hdr));
+	struct icmphdr *icmp_hdr = (struct icmphdr *)((char *)ip_hdr + sizeof(*ip_hdr));
+
+	icmp_hdr->type = type;
+	icmp_hdr->code = 0;
+
+	char *router_ip_tmp = get_interface_ip(interface);
+	int router_ip;
+
+	inet_pton(AF_INET, router_ip_tmp, &router_ip);
+
+	ip_hdr->daddr = ip_hdr->saddr;
+	ip_hdr->saddr = router_ip;
+	ip_hdr->ttl = 64;
+	ip_hdr->protocol = IPPROTO_ICMP;
+
+	send_to_link(interface, (char *)eth_hdr, sizeof(*eth_hdr) + sizeof(*ip_hdr) + sizeof(*icmp_hdr));
+
+	return 0;
+}
+
 int dr_ip_packet(struct iphdr *ip_hdr, int interface, size_t len)
 {
 	char *router_ip_tmp = get_interface_ip(interface);
