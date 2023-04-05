@@ -74,6 +74,11 @@ int dr_icmp_packet(struct ether_header *eth_hdr, uint8_t type, int interface)
 
 	icmp_hdr->type = type;
 	icmp_hdr->code = 0;
+	icmp_hdr->checksum = 0;
+	icmp_hdr->checksum = htons(checksum((uint16_t *)icmp_hdr, sizeof(*icmp_hdr)));
+
+	int8_t *icmp_body = malloc(sizeof(struct iphdr) + 8);
+	memcpy(icmp_body, ip_hdr, sizeof(struct iphdr) + 8);
 
 	char *router_ip_tmp = get_interface_ip(interface);
 	int router_ip;
@@ -84,8 +89,17 @@ int dr_icmp_packet(struct ether_header *eth_hdr, uint8_t type, int interface)
 	ip_hdr->saddr = router_ip;
 	ip_hdr->ttl = 64;
 	ip_hdr->protocol = IPPROTO_ICMP;
+	ip_hdr->tot_len = htons(sizeof(struct icmphdr) + 2 * sizeof(struct iphdr) + 8);
+	ip_hdr->check = 0;
+	ip_hdr->check = htons(checksum((uint16_t *)ip_hdr, sizeof(*ip_hdr)));
 
-	send_to_link(interface, (char *)eth_hdr, sizeof(*eth_hdr) + sizeof(*ip_hdr) + sizeof(*icmp_hdr));
+	memcpy(eth_hdr->ether_dhost, eth_hdr->ether_shost, sizeof(eth_hdr->ether_shost));
+	get_interface_mac(interface, eth_hdr->ether_shost);
+
+	memcpy((char *)icmp_hdr + sizeof(*icmp_hdr), icmp_body, sizeof(struct iphdr) + 8);
+
+	send_to_link(interface, (char *)eth_hdr, sizeof(*eth_hdr) + sizeof(*ip_hdr) + sizeof(*icmp_hdr) + sizeof(struct iphdr) + 8);
+	free(icmp_body);
 
 	return 0;
 }
@@ -112,6 +126,7 @@ int dr_ip_packet(struct iphdr *ip_hdr, int interface, size_t len)
 			printf("TTL <= 1.\n");
 
 			/* TODO: Implement ICMP "Time exceeded" */
+			dr_icmp_packet((struct ether_header *)((char *)ip_hdr - sizeof(struct ether_header)), 11, interface);
 			return -1;
 		}
 
@@ -125,6 +140,7 @@ int dr_ip_packet(struct iphdr *ip_hdr, int interface, size_t len)
 			printf("Route for destination not found.\n");
 
 			/* TODO: Implement ICMP "Destination unreachable" */
+			dr_icmp_packet((struct ether_header *)((char *)ip_hdr - sizeof(struct ether_header)), 3, interface);
 			return -1;
 		}
 
