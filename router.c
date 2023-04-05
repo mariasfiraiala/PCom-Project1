@@ -169,7 +169,38 @@ int dr_ip_packet(struct iphdr *ip_hdr, int interface, size_t len)
 
 		send_to_link(next_route->interface, (char *)eth_hdr, len);
 	} else {
+		struct icmphdr *icmp_hdr = (struct icmphdr *)((char *)ip_hdr + sizeof(*ip_hdr));
+		struct ether_header *eth_hdr = (struct ether_header *)((char *)ip_hdr - sizeof(*eth_hdr));
 
+		icmp_hdr->type = 0;
+		icmp_hdr->code = 0;
+		icmp_hdr->checksum = 0;
+		icmp_hdr->checksum = htons(checksum((uint16_t *)icmp_hdr, sizeof(*icmp_hdr)));
+
+		int32_t icmp_len = ntohs(ip_hdr->tot_len) - sizeof(*ip_hdr) - sizeof(*icmp_hdr);
+		int8_t *icmp_body = malloc(icmp_len);
+		memcpy(icmp_body, ip_hdr, icmp_len);
+
+		char *router_ip_tmp = get_interface_ip(interface);
+		int router_ip;
+
+		inet_pton(AF_INET, router_ip_tmp, &router_ip);
+
+		ip_hdr->daddr = ip_hdr->saddr;
+		ip_hdr->saddr = router_ip;
+		ip_hdr->ttl = 64;
+		ip_hdr->protocol = IPPROTO_ICMP;
+		ip_hdr->tot_len = htons((uint16_t)icmp_len + sizeof(*icmp_hdr) + sizeof(*ip_hdr));
+		ip_hdr->check = 0;
+		ip_hdr->check = htons(checksum((uint16_t *)ip_hdr, sizeof(*ip_hdr)));
+
+		memcpy(eth_hdr->ether_dhost, eth_hdr->ether_shost, sizeof(eth_hdr->ether_shost));
+		get_interface_mac(interface, eth_hdr->ether_shost);
+
+		memcpy((char *)icmp_hdr + sizeof(*icmp_hdr), icmp_body, icmp_len);
+
+		send_to_link(interface, (char *)eth_hdr, sizeof(*eth_hdr) + sizeof(*ip_hdr) + sizeof(*icmp_hdr) + icmp_len);
+		free(icmp_body);
 	}
 
 	return 0;
