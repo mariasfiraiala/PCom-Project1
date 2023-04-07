@@ -10,6 +10,9 @@
 #define ROUTER_NUM_INTERFACES 3
 #define MAX_RTABLE_LEN 100000
 #define MAX_ARP_TABLE_LEN 20
+#define IP_ETHERTYPE 0x0800
+#define ARP_ETHERTYPE 0x0806
+#define MAX_TTL 64
 
 #define DIE(condition, message, ...) \
 	do { \
