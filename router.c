@@ -13,20 +13,42 @@ uint32_t arp_table_len;
 
 doubly_linked_list_t *waiting_queue;
 
+int comparator(const void *p, const void *q)
+{
+	struct route_table_entry route1 = *(struct route_table_entry *)p;
+	struct route_table_entry route2 = *(struct route_table_entry *)q;
+
+	if (ntohl(route1.prefix) > ntohl(route2.prefix))
+		return 1;
+
+	if (ntohl(route1.prefix) == ntohl(route2.prefix))
+		if (ntohl(route1.mask) > ntohl(route2.mask))
+			return 1;
+
+	return -1;
+}
+
 struct route_table_entry *dr_get_next_route(uint32_t ip_dest)
 {
+	int l = 0;
+	int r = rtable_len - 1;
 	struct route_table_entry *next_hop = NULL;
-	uint32_t max_mask = 0;
-	for (int i = 0; i < rtable_len; ++i) {
-		if ((ip_dest & rtable[i].mask) == rtable[i].prefix) {
 
-			if (rtable[i].mask > max_mask) {
-				max_mask = rtable[i].mask;
-				next_hop = &rtable[i];
-			}
-		}
+	while (l <= r) {
+		int m = l + (r - l) / 2;
+
+		if ((ip_dest & rtable[m].mask) == rtable[m].prefix && !next_hop)
+			next_hop = &rtable[m];
+
+		if ((ip_dest & rtable[m].mask) == rtable[m].prefix && next_hop)
+			if (ntohl(rtable[m].mask) > ntohl(next_hop->mask))
+				next_hop = &rtable[m];
+
+		if (ntohl(rtable[m].prefix) <= ntohl(ip_dest))
+			l = m + 1;
+		else
+			r = m - 1;
 	}
-
 	return next_hop;
 }
 
@@ -125,7 +147,7 @@ int dr_ip_packet(struct iphdr *ip_hdr, int interface, size_t len)
 		if (ip_hdr->ttl <= 1) {
 			printf("TTL <= 1.\n");
 
-			/* TODO: Implement ICMP "Time exceeded" */
+			/* Implement ICMP "Time exceeded" */
 			dr_icmp_packet((struct ether_header *)((char *)ip_hdr - sizeof(struct ether_header)), 11, interface);
 			return -1;
 		}
@@ -139,7 +161,7 @@ int dr_ip_packet(struct iphdr *ip_hdr, int interface, size_t len)
 		if (!next_route) {
 			printf("Route for destination not found.\n");
 
-			/* TODO: Implement ICMP "Destination unreachable" */
+			/* Implement ICMP "Destination unreachable" */
 			dr_icmp_packet((struct ether_header *)((char *)ip_hdr - sizeof(struct ether_header)), 3, interface);
 			return -1;
 		}
@@ -265,6 +287,12 @@ int main(int argc, char *argv[])
 	DIE(!rtable, "malloc() failed\n");
 	rtable_len = read_rtable(argv[1], rtable);
 
+	qsort(rtable, rtable_len, sizeof(rtable[0]), comparator);
+
+	for (int i = 0; i < 4; ++i) {
+		printf("prefix: %d mask: %d\n", ntohl(rtable[i].prefix), ntohl(rtable[i].mask));
+	}
+
 	arp_table = malloc (sizeof(*arp_table) * MAX_ARP_TABLE_LEN);
 	DIE(!arp_table, "malloc() failed\n");
 
@@ -295,4 +323,3 @@ int main(int argc, char *argv[])
 
 	return 0;
 }
-
