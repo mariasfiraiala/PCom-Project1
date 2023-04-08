@@ -287,7 +287,11 @@ static void dr_arp_packet(struct ether_header *eth_hdr,
 
 				send_to_link(entry->next_route->interface,
 							(char *)entry_eth_hdr, entry->len);
-				dll_remove_nth_node(waiting_queue, i);
+
+				dll_node_t *node = dll_remove_nth_node(waiting_queue, i);
+				free(((struct waiting_queue_entry *)(node->data))->eth_hdr);
+				free(node);
+
 				--i;
 			}
 			++i;
